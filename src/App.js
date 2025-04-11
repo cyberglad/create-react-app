@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import './App.css';
 
 function App() {
@@ -9,27 +8,44 @@ function App() {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    if (token) {
-      axios.get('/api/history', {
-        headers: { Authorization: `Bearer ${token}` }
-      }).then(res => setHistory(res.data))
-        .catch(err => console.error('Error fetching history:', err));
-    }
+    const fetchHistory = async () => {
+      if (token) {
+        try {
+          const response = await fetch('/api/history', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json();
+          setHistory(data);
+        } catch (err) {
+          console.error('Error fetching history:', err);
+        }
+      }
+    };
+
+    fetchHistory();
   }, [token]);
 
   const handleUpload = async () => {
     if (!audio) return alert('Please select an audio file.');
     const formData = new FormData();
     formData.append('audio', audio);
+
     try {
-      const res = await axios.post('/api/upload', formData, {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
+        },
+        body: formData,
       });
-      setTranscription(res.data.text);
-      setHistory(prev => [res.data.text, ...prev]);
+
+      if (!response.ok) {
+        throw new Error('Upload error');
+      }
+
+      const data = await response.json();
+      setTranscription(data.text);
+      setHistory(prev => [data.text, ...prev]);
     } catch (err) {
       console.error('Upload error:', err);
     }
@@ -67,10 +83,23 @@ function Auth({ setToken }) {
 
   const handleAuth = async () => {
     const endpoint = isLogin ? '/api/login' : '/api/signup';
+
     try {
-      const res = await axios.post(endpoint, { email, password });
-      localStorage.setItem('token', res.data.token);
-      setToken(res.data.token);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Auth failed');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
     } catch (err) {
       alert('Auth failed.');
       console.error(err);
@@ -80,8 +109,18 @@ function Auth({ setToken }) {
   return (
     <div className="auth">
       <h2>{isLogin ? 'Login' : 'Sign Up'}</h2>
-      <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-      <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+      />
       <button onClick={handleAuth}>{isLogin ? 'Login' : 'Sign Up'}</button>
       <p onClick={() => setIsLogin(!isLogin)} style={{ cursor: 'pointer' }}>
         {isLogin ? 'Need an account? Sign up' : 'Already have an account? Log in'}
